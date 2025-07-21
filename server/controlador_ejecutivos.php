@@ -7,6 +7,7 @@ ini_set('display_errors', 1);
 file_put_contents('debug_ejecutivos.log', '[' . date('Y-m-d H:i:s') . '] REQUEST recibido: ' . print_r($_POST, true) . "\n", FILE_APPEND);
 
 include '../inc/conexion.php';
+include '../inc/websocket_utils.php';
 header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -379,6 +380,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 					file_put_contents('debug_ejecutivos.log', '[' . date('Y-m-d H:i:s') . '] VERIFICACIÓN - Nuevo padre: ' . $nuevoPadreReal . ', Nuevo plantel: ' . $nuevoPlantelReal . "\n", FILE_APPEND);
 				}
 				
+				// =====================================
+				// NOTIFICACIONES WEBSOCKET P25/P26
+				// =====================================
+				
+				// Enviar notificación de movimiento jerárquico si cambió el padre
+				if ($padreAnterior != $id_padre) {
+					notificarMovimientoEjecutivo($id_eje, $padreAnterior, $id_padre, $nombreEjecutivo);
+					file_put_contents('debug_ejecutivos.log', '[' . date('Y-m-d H:i:s') . '] WebSocket movimiento enviado' . "\n", FILE_APPEND);
+				}
+				
+				// Enviar notificación de cambio de plantel si cambió el plantel
+				if ($plantelAnterior != $id_pla) {
+					notificarCambioPlantelEjecutivo($id_eje, $plantelAnterior, $id_pla, $nombreEjecutivo);
+					
+					// Actualizar estadísticas del plantel anterior si existía
+					if ($plantelAnterior) {
+						$estadisticasAnterior = obtenerEstadisticasPlantel($plantelAnterior, $connection);
+						notificarActualizacionCitasPlantel($plantelAnterior, "Plantel ID $plantelAnterior", $estadisticasAnterior);
+					}
+					
+					// Actualizar estadísticas del plantel nuevo si existe
+					if ($id_pla) {
+						$estadisticasNuevo = obtenerEstadisticasPlantel($id_pla, $connection);
+						notificarActualizacionCitasPlantel($id_pla, "Plantel ID $id_pla", $estadisticasNuevo);
+					}
+					
+					file_put_contents('debug_ejecutivos.log', '[' . date('Y-m-d H:i:s') . '] WebSocket cambio plantel enviado' . "\n", FILE_APPEND);
+				}
+				
 				// Registrar en historial si existe
 				if(function_exists('registrarHistorial')) {
 					$descripcionPadre = $id_padre ? "bajo ejecutivo ID $id_padre" : "como nodo raíz";
@@ -598,18 +628,35 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 				$condicion_fecha = "AND c.cit_cit <= '$fecha_fin'";
 			}
 			
-			// Obtener total de citas del plantel
-			$query = "SELECT COUNT(*) as total_citas
+			// NUEVA LÓGICA P25/P26: Contar citas directamente asociadas al plantel
+			// Esto funciona aún si id_eje2 es NULL (citas huérfanas)
+			$query = "SELECT 
+						COUNT(*) as total_citas,
+						COUNT(CASE WHEN c.id_eje2 IS NOT NULL THEN 1 END) as citas_con_ejecutivo,
+						COUNT(CASE WHEN c.id_eje2 IS NULL THEN 1 END) as citas_sin_ejecutivo,
+						p.nom_pla
 					  FROM cita c 
-					  LEFT JOIN ejecutivo e ON e.id_eje = c.id_eje2 
-					  LEFT JOIN plantel p ON e.id_pla = p.id_pla 
-					  WHERE p.id_pla = $id_pla AND c.eli_cit = 1 $condicion_fecha";
+					  LEFT JOIN plantel p ON c.pla_cit = p.id_pla 
+					  WHERE c.pla_cit = $id_pla AND c.eli_cit = 1 $condicion_fecha
+					  GROUP BY p.nom_pla";
 			
 			$datos = ejecutarConsulta($query, $connection);
 
 			if($datos !== false) {
-				$total_citas_por_plantel = $datos[0]['total_citas'];
-				echo respuestaExito(['total_citas' => $total_citas_por_plantel], 'Total de citas obtenidas correctamente');
+				if (!empty($datos)) {
+					$resultado = $datos[0];
+				} else {
+					// Si no hay citas, obtener nombre del plantel
+					$queryPlantel = "SELECT nom_pla FROM plantel WHERE id_pla = $id_pla";
+					$plantelResult = ejecutarConsulta($queryPlantel, $connection);
+					$resultado = [
+						'total_citas' => 0,
+						'citas_con_ejecutivo' => 0,
+						'citas_sin_ejecutivo' => 0,
+						'nom_pla' => $plantelResult ? $plantelResult[0]['nom_pla'] : 'Plantel desconocido'
+					];
+				}
+				echo respuestaExito($resultado, 'Total de citas del plantel obtenidas correctamente');
 			} else {
 				$error = mysqli_error($connection);
 				echo respuestaError('Error al consultar total de citas: ' . $error . ' Query: ' . $query);

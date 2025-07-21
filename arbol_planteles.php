@@ -942,6 +942,16 @@
                     procesarMovimientoWebSocket(mensaje);
                 } else if (mensaje.tipo === 'ejecutivo_estado_cambiado') {
                     procesarCambioEstadoWebSocket(mensaje);
+                } else if (mensaje.tipo === 'ejecutivo_cambio_plantel') {
+                    procesarCambioPlantelWebSocket(mensaje);
+                } else if (mensaje.tipo === 'actualizacion_citas_plantel') {
+                    procesarActualizacionCitasPlantelWebSocket(mensaje);
+                } else if (mensaje.tipo === 'cita_cambio_plantel') {
+                    procesarCitaCambioPlantelWebSocket(mensaje);
+                } else if (mensaje.tipo === 'cita_disociacion') {
+                    procesarCitaDisociacionWebSocket(mensaje);
+                } else if (mensaje.tipo === 'cita_reasociacion') {
+                    procesarCitaReasociacionWebSocket(mensaje);
                 }
             };
             
@@ -1154,6 +1164,147 @@
             console.log('[WebSocket] ' + mensaje);
         }
         
+        // =====================================
+        // NUEVAS FUNCIONES WEBSOCKET P25/P26
+        // =====================================
+        
+        function procesarCambioPlantelWebSocket(mensaje) {
+            if (!mensaje.id_eje) {
+                return;
+            }
+            
+            log('🏢 Procesando cambio de plantel ejecutivo ID: ' + mensaje.id_eje);
+            
+            // Buscar el ejecutivo y actualizar su plantel
+            var ejecutivo = ejecutivos.find(e => e.id_eje == mensaje.id_eje);
+            if (ejecutivo) {
+                var plantelAnterior = ejecutivo.id_pla;
+                ejecutivo.id_pla = mensaje.plantel_nuevo;
+                
+                // Regenerar todos los árboles para mostrar cambios
+                generarArbolesPorPlantel();
+                
+                // Recargar conteos de citas porque cambió la distribución
+                cargarCitasPorPlantel();
+                
+                // Aplicar feedback visual específico
+                setTimeout(function() {
+                    aplicarFeedbackVisualEjecutivo(mensaje.id_eje, 'cambio_plantel');
+                }, 100);
+                
+                // Mostrar notificación
+                var mensajeNotif = 'Ejecutivo ' + mensaje.nom_eje + ' cambió de plantel';
+                mostrarBadgeWebSocket('warning', mensajeNotif);
+            }
+        }
+        
+        function procesarActualizacionCitasPlantelWebSocket(mensaje) {
+            if (!mensaje.id_pla) {
+                return;
+            }
+            
+            log('📊 Actualizando estadísticas plantel ID: ' + mensaje.id_pla);
+            
+            // Buscar el plantel y actualizar sus estadísticas si las tenemos cacheadas
+            var plantelActualizar = citasPorPlantel[mensaje.id_pla];
+            if (plantelActualizar && mensaje.estadisticas) {
+                // Actualizar estadísticas cacheadas
+                Object.assign(plantelActualizar, mensaje.estadisticas);
+                
+                // Actualizar contadores visuales en la interfaz
+                actualizarContadorPlantel(mensaje.id_pla, mensaje.estadisticas);
+                
+                // Mostrar notificación
+                mostrarBadgeWebSocket('info', 'Estadísticas actualizadas: ' + mensaje.nom_pla);
+            }
+        }
+        
+        function procesarCitaCambioPlantelWebSocket(mensaje) {
+            if (!mensaje.id_cit) {
+                return;
+            }
+            
+            log('🔄 Procesando migración cita ID: ' + mensaje.id_cit);
+            
+            // Recargar estadísticas de ambos planteles afectados
+            if (mensaje.plantel_anterior) {
+                cargarCitasPlantelEspecifico(mensaje.plantel_anterior);
+            }
+            if (mensaje.plantel_nuevo) {
+                cargarCitasPlantelEspecifico(mensaje.plantel_nuevo);
+            }
+            
+            // Mostrar notificación
+            mostrarBadgeWebSocket('info', 'Cita migrada entre planteles');
+        }
+        
+        function procesarCitaDisociacionWebSocket(mensaje) {
+            if (!mensaje.id_cit) {
+                return;
+            }
+            
+            log('❌ Procesando disociación cita ID: ' + mensaje.id_cit);
+            
+            // Recargar estadísticas porque una cita quedó sin ejecutivo
+            cargarCitasPorPlantel();
+            
+            // Mostrar notificación
+            mostrarBadgeWebSocket('warning', 'Cita desasociada de ejecutivo');
+        }
+        
+        function procesarCitaReasociacionWebSocket(mensaje) {
+            if (!mensaje.id_cit) {
+                return;
+            }
+            
+            log('➡️ Procesando reasociación cita ID: ' + mensaje.id_cit);
+            
+            // Recargar estadísticas porque cambió la asignación
+            cargarCitasPorPlantel();
+            
+            // Mostrar notificación  
+            mostrarBadgeWebSocket('success', 'Cita reasignada a nuevo ejecutivo');
+        }
+        
+        function actualizarContadorPlantel(idPlantel, estadisticas) {
+            // Actualizar el contador visual del plantel en la interfaz
+            var contenedorPlantel = $('#plantel_' + idPlantel);
+            if (contenedorPlantel.length) {
+                var headerPlantel = contenedorPlantel.find('.plantel-header');
+                var contadorSpan = headerPlantel.find('.badge-primary');
+                
+                if (contadorSpan.length && estadisticas.total_citas !== undefined) {
+                    contadorSpan.text(estadisticas.total_citas + ' citas');
+                    
+                    // Agregar animación de actualización
+                    contadorSpan.addClass('websocket-changed');
+                    setTimeout(function() {
+                        contadorSpan.removeClass('websocket-changed');
+                    }, 2000);
+                }
+            }
+        }
+        
+        function cargarCitasPlantelEspecifico(idPlantel) {
+            // Función auxiliar para recargar las estadísticas de un plantel específico
+            $.ajax({
+                url: 'server/controlador_ejecutivos.php',
+                type: 'POST',
+                data: { 
+                    action: 'obtener_citas_totales_por_plantel',
+                    id_pla: idPlantel 
+                },
+                dataType: 'json'
+            }).done(function(response) {
+                if (response.success && response.data) {
+                    citasPorPlantel[idPlantel] = response.data;
+                    actualizarContadorPlantel(idPlantel, response.data);
+                }
+            }).fail(function(xhr, status, error) {
+                console.error('Error al cargar citas del plantel ' + idPlantel + ':', error);
+            });
+        }
+
         // =====================================
         // FUNCIONES DE CARGA DE DATOS
         // =====================================

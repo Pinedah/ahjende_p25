@@ -7,6 +7,7 @@ ini_set('display_errors', 1);
 file_put_contents('debug.log', '[' . date('Y-m-d H:i:s') . '] REQUEST recibido: ' . print_r($_POST, true) . "\n", FILE_APPEND);
 
 include '../inc/conexion.php';
+include '../inc/websocket_utils.php';
 header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -54,8 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 				}
 			}
 			
-			// Agregar el campo del ejecutivo
+			// Agregar el campo del ejecutivo y plantel
 			$camposSelect[] = 'e.nom_eje';
+			$camposSelect[] = 'p.nom_pla';
 			$selectFields = implode(', ', $camposSelect);
 			
 			// Construir la consulta base
@@ -99,9 +101,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 		
 		// Manejo de filtro por plantel
 		if ($id_plantel) {
-			// Filtrar por ejecutivos del plantel especificado
-			$whereConditions[] = "e.id_pla = $id_plantel";
-			file_put_contents('debug.log', '[' . date('Y-m-d H:i:s') . '] - Filtro por plantel: ' . $id_plantel . "\n", FILE_APPEND);
+			// NUEVA LÓGICA P25/P26: Filtrar por citas que pertenecen al plantel directamente
+			// Esto permite ver citas que persisten en el plantel aún si el ejecutivo cambió
+			$whereConditions[] = "c.pla_cit = $id_plantel";
+			file_put_contents('debug.log', '[' . date('Y-m-d H:i:s') . '] - Filtro por plantel (nueva lógica): ' . $id_plantel . "\n", FILE_APPEND);
 		}
 					$whereClause = implode(' AND ', $whereConditions);
 		
@@ -113,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$query = "SELECT $selectFields 
 					 FROM cita c
 					 LEFT JOIN ejecutivo e ON c.id_eje2 = e.id_eje
+					 LEFT JOIN plantel p ON c.pla_cit = p.id_pla
 					 WHERE $whereClause
 					 ORDER BY c.cit_cit ASC, c.hor_cit ASC";
 		} else {
@@ -120,6 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$query = "SELECT $selectFields 
 					 FROM cita c
 					 LEFT JOIN ejecutivo e ON c.id_eje2 = e.id_eje
+					 LEFT JOIN plantel p ON c.pla_cit = p.id_pla
 					 WHERE $whereClause
 					 ORDER BY c.cit_cit DESC, c.hor_cit ASC";
 		}
@@ -618,6 +623,362 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 				'citas_efectivas' => $citasEfectivas,
 				'registros' => $registros
 			], 'Estadísticas del embudo obtenidas correctamente');
+		break;
+
+		case 'obtener_citas_por_plantel':
+			$id_plantel = isset($_POST['id_plantel']) ? intval($_POST['id_plantel']) : null;
+			$fecha_inicio = isset($_POST['fecha_inicio']) ? escape($_POST['fecha_inicio'], $connection) : null;
+			$fecha_fin = isset($_POST['fecha_fin']) ? escape($_POST['fecha_fin'], $connection) : null;
+			$incluir_sin_ejecutivo = isset($_POST['incluir_sin_ejecutivo']) && $_POST['incluir_sin_ejecutivo'] === 'true';
+
+			if (!$id_plantel) {
+				echo respuestaError('ID de plantel requerido');
+				break;
+			}
+
+			// Construir WHERE clause
+			$whereConditions = ['c.eli_cit = 1', "c.pla_cit = $id_plantel"];
+
+			// Agregar filtros de fecha
+			if ($fecha_inicio) {
+				$whereConditions[] = "c.cit_cit >= '$fecha_inicio'";
+			}
+			if ($fecha_fin) {
+				$whereConditions[] = "c.cit_cit <= '$fecha_fin'";
+			}
+
+			// Filtrar por ejecutivos si se requiere
+			if (!$incluir_sin_ejecutivo) {
+				$whereConditions[] = "c.id_eje2 IS NOT NULL";
+			}
+
+			$whereClause = implode(' AND ', $whereConditions);
+
+			$query = "SELECT c.*, e.nom_eje, p.nom_pla
+					  FROM cita c
+					  LEFT JOIN ejecutivo e ON c.id_eje2 = e.id_eje
+					  LEFT JOIN plantel p ON c.pla_cit = p.id_pla
+					  WHERE $whereClause
+					  ORDER BY c.cit_cit ASC, c.hor_cit ASC";
+
+			$datos = ejecutarConsulta($query, $connection);
+
+			if($datos !== false) {
+				echo respuestaExito($datos, 'Citas del plantel obtenidas correctamente');
+			} else {
+				echo respuestaError('Error al consultar citas del plantel: ' . mysqli_error($connection));
+			}
+		break;
+
+		case 'contar_citas_por_plantel':
+			$id_plantel = isset($_POST['id_plantel']) ? intval($_POST['id_plantel']) : null;
+			$fecha_inicio = isset($_POST['fecha_inicio']) ? escape($_POST['fecha_inicio'], $connection) : null;
+			$fecha_fin = isset($_POST['fecha_fin']) ? escape($_POST['fecha_fin'], $connection) : null;
+
+			if (!$id_plantel) {
+				echo respuestaError('ID de plantel requerido');
+				break;
+			}
+
+			// Construir WHERE clause
+			$whereConditions = ['c.eli_cit = 1', "c.pla_cit = $id_plantel"];
+
+			// Agregar filtros de fecha
+			if ($fecha_inicio) {
+				$whereConditions[] = "c.cit_cit >= '$fecha_inicio'";
+			}
+			if ($fecha_fin) {
+				$whereConditions[] = "c.cit_cit <= '$fecha_fin'";
+			}
+
+			$whereClause = implode(' AND ', $whereConditions);
+
+			$query = "SELECT 
+						COUNT(*) as total_citas,
+						COUNT(CASE WHEN c.id_eje2 IS NOT NULL THEN 1 END) as citas_con_ejecutivo,
+						COUNT(CASE WHEN c.id_eje2 IS NULL THEN 1 END) as citas_sin_ejecutivo,
+						COUNT(CASE WHEN DATE(c.cit_cit) = CURDATE() THEN 1 END) as citas_hoy,
+						COUNT(CASE WHEN DATE(c.cit_cit) >= CURDATE() THEN 1 END) as citas_futuras,
+						COUNT(CASE WHEN DATE(c.cit_cit) < CURDATE() THEN 1 END) as citas_pasadas,
+						p.nom_pla
+					  FROM cita c
+					  LEFT JOIN plantel p ON c.pla_cit = p.id_pla
+					  WHERE $whereClause
+					  GROUP BY c.pla_cit, p.nom_pla";
+
+			$datos = ejecutarConsulta($query, $connection);
+
+			if($datos !== false) {
+				// Si no hay datos, devolver estructura vacía
+				if (empty($datos)) {
+					$queryPlantel = "SELECT nom_pla FROM plantel WHERE id_pla = $id_plantel";
+					$plantelResult = ejecutarConsulta($queryPlantel, $connection);
+					$nomPlantel = $plantelResult ? $plantelResult[0]['nom_pla'] : 'Plantel desconocido';
+					
+					$datos = [[
+						'total_citas' => 0,
+						'citas_con_ejecutivo' => 0,
+						'citas_sin_ejecutivo' => 0,
+						'citas_hoy' => 0,
+						'citas_futuras' => 0,
+						'citas_pasadas' => 0,
+						'nom_pla' => $nomPlantel
+					]];
+				}
+				echo respuestaExito($datos[0], 'Conteo de citas del plantel obtenido correctamente');
+			} else {
+				echo respuestaError('Error al contar citas del plantel: ' . mysqli_error($connection));
+			}
+		break;
+
+		case 'obtener_estadisticas_planteles':
+			$fecha_inicio = isset($_POST['fecha_inicio']) ? escape($_POST['fecha_inicio'], $connection) : null;
+			$fecha_fin = isset($_POST['fecha_fin']) ? escape($_POST['fecha_fin'], $connection) : null;
+
+			// Construir WHERE clause
+			$whereConditions = ['c.eli_cit = 1'];
+
+			// Agregar filtros de fecha
+			if ($fecha_inicio) {
+				$whereConditions[] = "c.cit_cit >= '$fecha_inicio'";
+			}
+			if ($fecha_fin) {
+				$whereConditions[] = "c.cit_cit <= '$fecha_fin'";
+			}
+
+			$whereClause = implode(' AND ', $whereConditions);
+
+			$query = "SELECT 
+						p.id_pla,
+						p.nom_pla,
+						COUNT(c.id_cit) as total_citas,
+						COUNT(CASE WHEN c.id_eje2 IS NOT NULL THEN 1 END) as citas_con_ejecutivo,
+						COUNT(CASE WHEN c.id_eje2 IS NULL THEN 1 END) as citas_sin_ejecutivo,
+						COUNT(CASE WHEN DATE(c.cit_cit) = CURDATE() THEN 1 END) as citas_hoy,
+						COUNT(CASE WHEN DATE(c.cit_cit) >= CURDATE() THEN 1 END) as citas_futuras,
+						COUNT(CASE WHEN DATE(c.cit_cit) < CURDATE() THEN 1 END) as citas_pasadas
+					  FROM plantel p
+					  LEFT JOIN cita c ON p.id_pla = c.pla_cit AND $whereClause
+					  GROUP BY p.id_pla, p.nom_pla
+					  ORDER BY p.nom_pla ASC";
+
+			$datos = ejecutarConsulta($query, $connection);
+
+			if($datos !== false) {
+				echo respuestaExito($datos, 'Estadísticas de planteles obtenidas correctamente');
+			} else {
+				echo respuestaError('Error al obtener estadísticas de planteles: ' . mysqli_error($connection));
+			}
+		break;
+
+		case 'migrar_cita_plantel':
+			$id_cit = isset($_POST['id_cit']) ? intval($_POST['id_cit']) : null;
+			$nuevo_plantel = isset($_POST['nuevo_plantel']) ? intval($_POST['nuevo_plantel']) : null;
+			$motivo = isset($_POST['motivo']) ? escape($_POST['motivo'], $connection) : 'Migración manual';
+
+			if (!$id_cit || !$nuevo_plantel) {
+				echo respuestaError('ID de cita y nuevo plantel son requeridos');
+				break;
+			}
+
+			// Obtener información actual de la cita
+			$queryActual = "SELECT c.*, p.nom_pla as plantel_actual, pn.nom_pla as plantel_nuevo
+							FROM cita c
+							LEFT JOIN plantel p ON c.pla_cit = p.id_pla
+							LEFT JOIN plantel pn ON pn.id_pla = $nuevo_plantel
+							WHERE c.id_cit = $id_cit";
+			
+			$citaActual = ejecutarConsulta($queryActual, $connection);
+			
+			if (!$citaActual) {
+				echo respuestaError('Cita no encontrada');
+				break;
+			}
+
+			$cita = $citaActual[0];
+
+			// Actualizar plantel de la cita
+			$query = "UPDATE cita SET pla_cit = $nuevo_plantel WHERE id_cit = $id_cit";
+
+			if(mysqli_query($connection, $query)) {
+				// =====================================
+				// NOTIFICACIÓN WEBSOCKET P25/P26
+				// =====================================
+				$plantel_anterior_id = $cita['pla_cit'];
+				notificarCambioPlantelCita($id_cit, $plantel_anterior_id, $nuevo_plantel, $motivo);
+				
+				// Actualizar estadísticas de ambos planteles
+				if ($plantel_anterior_id) {
+					$estadisticasAnterior = obtenerEstadisticasPlantel($plantel_anterior_id, $connection);
+					notificarActualizacionCitasPlantel($plantel_anterior_id, $cita['plantel_actual'], $estadisticasAnterior);
+				}
+				
+				$estadisticasNuevo = obtenerEstadisticasPlantel($nuevo_plantel, $connection);
+				notificarActualizacionCitasPlantel($nuevo_plantel, $cita['plantel_nuevo'], $estadisticasNuevo);
+				
+				// Registrar en historial
+				$nombreCita = $cita['nom_cit'] ?: 'Sin nombre';
+				$plantelAnterior = $cita['plantel_actual'] ?: 'Sin plantel';
+				$plantelNuevo = $cita['plantel_nuevo'] ?: 'Plantel desconocido';
+				$descripcion = "Se migró la cita '$nombreCita' del plantel '$plantelAnterior' al plantel '$plantelNuevo'. Motivo: $motivo";
+				registrarHistorial($connection, $id_cit, 'migración', $descripcion);
+
+				echo respuestaExito([
+					'cita_id' => $id_cit,
+					'plantel_anterior' => $plantelAnterior,
+					'plantel_nuevo' => $plantelNuevo
+				], 'Cita migrada correctamente');
+			} else {
+				echo respuestaError('Error al migrar cita: ' . mysqli_error($connection));
+			}
+		break;
+
+		case 'desasociar_cita_ejecutivo':
+			// =====================================
+			// P26: DESASOCIAR CITA DE EJECUTIVO
+			// =====================================
+			$id_cit = isset($_POST['id_cit']) ? intval($_POST['id_cit']) : null;
+			$motivo = isset($_POST['motivo']) ? escape($_POST['motivo'], $connection) : 'Desasociación por regla de negocio';
+			$mantener_plantel = isset($_POST['mantener_plantel']) ? (bool)$_POST['mantener_plantel'] : true;
+
+			if (!$id_cit) {
+				echo respuestaError('ID de cita es requerido');
+				break;
+			}
+
+			// Obtener información actual de la cita
+			$queryActual = "SELECT c.*, e.nom_eje, p.nom_pla 
+							FROM cita c
+							LEFT JOIN ejecutivo e ON c.id_eje2 = e.id_eje
+							LEFT JOIN plantel p ON c.pla_cit = p.id_pla
+							WHERE c.id_cit = $id_cit";
+			
+			$citaActual = ejecutarConsulta($queryActual, $connection);
+			
+			if (!$citaActual) {
+				echo respuestaError('Cita no encontrada');
+				break;
+			}
+
+			$cita = $citaActual[0];
+			$ejecutivo_anterior = $cita['id_eje2'];
+			$nombre_ejecutivo = $cita['nom_eje'];
+
+			if (!$ejecutivo_anterior) {
+				echo respuestaError('La cita ya está desasociada de cualquier ejecutivo');
+				break;
+			}
+
+			// Desasociar la cita del ejecutivo (pero mantener el plantel por P25)
+			$query = "UPDATE cita SET id_eje2 = NULL WHERE id_cit = $id_cit";
+
+			if(mysqli_query($connection, $query)) {
+				// =====================================
+				// NOTIFICACIÓN WEBSOCKET P26
+				// =====================================
+				notificarDisociacionCitaEjecutivo($id_cit, $ejecutivo_anterior, $motivo);
+				
+				// Actualizar estadísticas del plantel (ahora tendrá una cita sin ejecutivo más)
+				if ($cita['pla_cit']) {
+					$estadisticasPlantel = obtenerEstadisticasPlantel($cita['pla_cit'], $connection);
+					notificarActualizacionCitasPlantel($cita['pla_cit'], $cita['nom_pla'], $estadisticasPlantel);
+				}
+				
+				// Registrar en historial
+				$nombreCita = $cita['nom_cit'] ?: 'Sin nombre';
+				$descripcion = "Se desasoció la cita '$nombreCita' del ejecutivo '$nombre_ejecutivo'. El plantel se mantiene para persistencia. Motivo: $motivo";
+				registrarHistorial($connection, $id_cit, 'desasociación', $descripcion);
+
+				echo respuestaExito([
+					'cita_id' => $id_cit,
+					'ejecutivo_anterior' => $nombre_ejecutivo,
+					'plantel_mantenido' => $cita['nom_pla'],
+					'mensaje' => 'Cita desasociada correctamente. La cita permanece visible en el plantel.'
+				], 'Cita desasociada del ejecutivo correctamente');
+			} else {
+				echo respuestaError('Error al desasociar cita: ' . mysqli_error($connection));
+			}
+		break;
+
+		case 'reasociar_cita_ejecutivo':
+			// =====================================
+			// P26: REASOCIAR CITA A NUEVO EJECUTIVO
+			// =====================================
+			$id_cit = isset($_POST['id_cit']) ? intval($_POST['id_cit']) : null;
+			$nuevo_ejecutivo = isset($_POST['nuevo_ejecutivo']) ? intval($_POST['nuevo_ejecutivo']) : null;
+			$motivo = isset($_POST['motivo']) ? escape($_POST['motivo'], $connection) : 'Reasociación de cita';
+
+			if (!$id_cit || !$nuevo_ejecutivo) {
+				echo respuestaError('ID de cita y nuevo ejecutivo son requeridos');
+				break;
+			}
+
+			// Verificar que el nuevo ejecutivo existe
+			$queryEjecutivo = "SELECT nom_eje, id_pla FROM ejecutivo WHERE id_eje = $nuevo_ejecutivo AND eli_eje = 1";
+			$ejecutivoInfo = ejecutarConsulta($queryEjecutivo, $connection);
+			
+			if (!$ejecutivoInfo) {
+				echo respuestaError('El ejecutivo especificado no existe o está inactivo');
+				break;
+			}
+
+			// Obtener información actual de la cita
+			$queryActual = "SELECT c.*, p.nom_pla 
+							FROM cita c
+							LEFT JOIN plantel p ON c.pla_cit = p.id_pla
+							WHERE c.id_cit = $id_cit";
+			
+			$citaActual = ejecutarConsulta($queryActual, $connection);
+			
+			if (!$citaActual) {
+				echo respuestaError('Cita no encontrada');
+				break;
+			}
+
+			$cita = $citaActual[0];
+			$ejecutivo_anterior = $cita['id_eje2'];
+
+			// Reasociar la cita al nuevo ejecutivo (mantener plantel original por P25)
+			$query = "UPDATE cita SET id_eje2 = $nuevo_ejecutivo WHERE id_cit = $id_cit";
+
+			if(mysqli_query($connection, $query)) {
+				// =====================================
+				// NOTIFICACIÓN WEBSOCKET P26
+				// =====================================
+				$mensaje_ws = [
+					'tipo' => 'cita_reasociacion',
+					'tabla' => 'cita',
+					'accion' => 'reasociada',
+					'datos' => [
+						'id_cit' => $id_cit,
+						'ejecutivo_anterior' => $ejecutivo_anterior,
+						'nuevo_ejecutivo' => $nuevo_ejecutivo,
+						'motivo' => $motivo,
+						'mensaje' => "Cita #$id_cit fue reasociada al ejecutivo {$ejecutivoInfo[0]['nom_eje']}"
+					]
+				];
+				enviarMensajeWebSocket($mensaje_ws);
+				
+				// Actualizar estadísticas del plantel
+				if ($cita['pla_cit']) {
+					$estadisticasPlantel = obtenerEstadisticasPlantel($cita['pla_cit'], $connection);
+					notificarActualizacionCitasPlantel($cita['pla_cit'], $cita['nom_pla'], $estadisticasPlantel);
+				}
+				
+				// Registrar en historial
+				$nombreCita = $cita['nom_cit'] ?: 'Sin nombre';
+				$descripcion = "Se reasignó la cita '$nombreCita' al ejecutivo '{$ejecutivoInfo[0]['nom_eje']}'. El plantel original se mantiene. Motivo: $motivo";
+				registrarHistorial($connection, $id_cit, 'reasociación', $descripcion);
+
+				echo respuestaExito([
+					'cita_id' => $id_cit,
+					'nuevo_ejecutivo' => $ejecutivoInfo[0]['nom_eje'],
+					'plantel_mantenido' => $cita['nom_pla'],
+					'mensaje' => 'Cita reasociada correctamente. El plantel original se mantiene.'
+				], 'Cita reasociada correctamente');
+			} else {
+				echo respuestaError('Error al reasociar cita: ' . mysqli_error($connection));
+			}
 		break;
 
 		default:
