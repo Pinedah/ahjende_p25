@@ -392,7 +392,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 				
 				// Enviar notificación de cambio de plantel si cambió el plantel
 				if ($plantelAnterior != $id_pla) {
-					notificarCambioPlantelEjecutivo($id_eje, $plantelAnterior, $id_pla, $nombreEjecutivo);
+					notificarCambioPlantelEjecutivo($id_eje, $plantelAnterior, $id_pla, $nombreEjecutivo, $connection);
 					
 					// Actualizar estadísticas del plantel anterior si existía
 					if ($plantelAnterior) {

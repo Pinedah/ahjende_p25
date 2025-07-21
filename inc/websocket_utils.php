@@ -35,7 +35,29 @@ function enviarMensajeWebSocket($mensaje) {
     }
 }
 
-function notificarCambioPlantelEjecutivo($id_ejecutivo, $plantel_anterior, $plantel_nuevo, $nombre_ejecutivo) {
+function notificarCambioPlantelEjecutivo($id_ejecutivo, $plantel_anterior, $plantel_nuevo, $nombre_ejecutivo, $connection = null) {
+    // Obtener nombres de planteles para el mensaje
+    $nombre_plantel_anterior = '';
+    $nombre_plantel_nuevo = '';
+    
+    if ($connection) {
+        if ($plantel_anterior) {
+            $query = "SELECT nom_pla FROM plantel WHERE id_pla = $plantel_anterior";
+            $result = mysqli_query($connection, $query);
+            if ($result && $row = mysqli_fetch_assoc($result)) {
+                $nombre_plantel_anterior = $row['nom_pla'];
+            }
+        }
+        
+        if ($plantel_nuevo) {
+            $query = "SELECT nom_pla FROM plantel WHERE id_pla = $plantel_nuevo";
+            $result = mysqli_query($connection, $query);
+            if ($result && $row = mysqli_fetch_assoc($result)) {
+                $nombre_plantel_nuevo = $row['nom_pla'];
+            }
+        }
+    }
+    
     $mensaje = [
         'tipo' => 'ejecutivo_cambio_plantel',
         'tabla' => 'ejecutivo',
@@ -45,8 +67,10 @@ function notificarCambioPlantelEjecutivo($id_ejecutivo, $plantel_anterior, $plan
             'nom_eje' => $nombre_ejecutivo,
             'plantel_anterior' => $plantel_anterior,
             'plantel_nuevo' => $plantel_nuevo,
+            'nombre_plantel_anterior' => $nombre_plantel_anterior,
+            'nombre_plantel_nuevo' => $nombre_plantel_nuevo,
             'nuevo_plantel' => $plantel_nuevo, // Para compatibilidad con código existente
-            'mensaje' => "Ejecutivo $nombre_ejecutivo cambió del plantel $plantel_anterior al plantel $plantel_nuevo"
+            'mensaje' => "Ejecutivo $nombre_ejecutivo cambió del plantel " . ($nombre_plantel_anterior ?: "ID $plantel_anterior") . " al plantel " . ($nombre_plantel_nuevo ?: "ID $plantel_nuevo")
         ]
     ];
     

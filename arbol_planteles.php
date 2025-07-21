@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Práctica 11 - Árbol Recursivo por Plantel</title>
+    <title>Práctica 25 - Árbol Recursivo por Plantel</title>
     
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
@@ -627,6 +627,57 @@
             }
         }
         
+        /* Específico para cambios de plantel - MÁS PROMINENTE */
+        .ejecutivo-cambio-plantel {
+            background: linear-gradient(45deg, #ff9800, #ffc107) !important;
+            animation: pulsoCambioPlantel 8s ease-in-out;
+            border-radius: 6px !important;
+            box-shadow: 0 0 20px rgba(255, 152, 0, 0.8) !important;
+            border: 2px solid #ff5722 !important;
+            color: #fff !important;
+            font-weight: bold !important;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7) !important;
+        }
+        
+        @keyframes pulsoCambioPlantel {
+            0% { 
+                background: linear-gradient(45deg, #ff9800, #ffc107) !important; 
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(255, 152, 0, 0.8);
+                border-color: #ff5722;
+            }
+            20% { 
+                background: linear-gradient(45deg, #ffc107, #ffeb3b) !important; 
+                transform: scale(1.05);
+                box-shadow: 0 0 30px rgba(255, 193, 7, 0.9);
+                border-color: #f44336;
+            }
+            40% { 
+                background: linear-gradient(45deg, #ff9800, #ffc107) !important; 
+                transform: scale(1);
+                box-shadow: 0 0 20px rgba(255, 152, 0, 0.8);
+                border-color: #ff5722;
+            }
+            60% { 
+                background: linear-gradient(45deg, #ffb74d, #ffd54f) !important; 
+                transform: scale(1.03);
+                box-shadow: 0 0 25px rgba(255, 183, 77, 0.7);
+                border-color: #e65100;
+            }
+            80% { 
+                background: linear-gradient(45deg, #ff9800, #ffc107) !important; 
+                transform: scale(1);
+                box-shadow: 0 0 15px rgba(255, 152, 0, 0.6);
+                border-color: #ff5722;
+            }
+            100% { 
+                background-color: transparent !important; 
+                transform: scale(1);
+                box-shadow: none;
+                border: none !important;
+            }
+        }
+        
         .websocket-badge {
             position: fixed;
             top: 20px;
@@ -1100,7 +1151,7 @@
                     if (nodeElement.length) {
                         console.log('Aplicando estilo a nodo:', node.id, 'en árbol:', treeId);
                         
-                        // Aplicar clase específica para movimiento
+                        // Aplicar clase específica según el tipo de cambio
                         if (campo === 'movimiento') {
                             nodeElement.addClass('ejecutivo-movido');
                             console.log('Clase ejecutivo-movido aplicada por 3 segundos');
@@ -1108,6 +1159,14 @@
                                 nodeElement.removeClass('ejecutivo-movido');
                                 console.log('Clase ejecutivo-movido removida');
                             }, 3000); // Duración aumentada para movimiento
+                        } else if (campo === 'cambio_plantel') {
+                            // Estilo específico y más prominente para cambios de plantel
+                            nodeElement.addClass('ejecutivo-cambio-plantel');
+                            console.log('Clase ejecutivo-cambio-plantel aplicada por 8 segundos');
+                            setTimeout(function() {
+                                nodeElement.removeClass('ejecutivo-cambio-plantel');
+                                console.log('Clase ejecutivo-cambio-plantel removida');
+                            }, 8000); // Duración aún mayor para cambios de plantel
                         } else {
                             // Para otros cambios, usar el estilo general
                             nodeElement.addClass('websocket-changed');
@@ -1169,17 +1228,20 @@
         // =====================================
         
         function procesarCambioPlantelWebSocket(mensaje) {
-            if (!mensaje.id_eje) {
+            // El mensaje llega anidado en un objeto 'datos'
+            var datos = mensaje.datos || mensaje;
+            
+            if (!datos.id_eje) {
                 return;
             }
             
-            log('🏢 Procesando cambio de plantel ejecutivo ID: ' + mensaje.id_eje);
+            log('🏢 Procesando cambio de plantel ejecutivo ID: ' + datos.id_eje);
             
             // Buscar el ejecutivo y actualizar su plantel
-            var ejecutivo = ejecutivos.find(e => e.id_eje == mensaje.id_eje);
+            var ejecutivo = ejecutivos.find(e => e.id_eje == datos.id_eje);
             if (ejecutivo) {
                 var plantelAnterior = ejecutivo.id_pla;
-                ejecutivo.id_pla = mensaje.plantel_nuevo;
+                ejecutivo.id_pla = datos.plantel_nuevo;
                 
                 // Regenerar todos los árboles para mostrar cambios
                 generarArbolesPorPlantel();
@@ -1187,14 +1249,22 @@
                 // Recargar conteos de citas porque cambió la distribución
                 cargarCitasPorPlantel();
                 
-                // Aplicar feedback visual específico
+                // Aplicar feedback visual específico y más prominente
                 setTimeout(function() {
-                    aplicarFeedbackVisualEjecutivo(mensaje.id_eje, 'cambio_plantel');
+                    aplicarFeedbackVisualEjecutivo(datos.id_eje, 'cambio_plantel');
                 }, 100);
                 
-                // Mostrar notificación
-                var mensajeNotif = 'Ejecutivo ' + mensaje.nom_eje + ' cambió de plantel';
+                // Mostrar notificación mejorada con nombres de planteles
+                var plantelAnteriorNombre = datos.nombre_plantel_anterior || ('Plantel ID ' + datos.plantel_anterior);
+                var plantelNuevoNombre = datos.nombre_plantel_nuevo || ('Plantel ID ' + datos.plantel_nuevo);
+                var mensajeNotif = datos.nom_eje + ' se movió de ' + plantelAnteriorNombre + ' a ' + plantelNuevoNombre;
+                
                 mostrarBadgeWebSocket('warning', mensajeNotif);
+                
+                // Log detallado
+                log('✅ Ejecutivo actualizado: ' + datos.nom_eje + ' (' + plantelAnteriorNombre + ' → ' + plantelNuevoNombre + ')');
+            } else {
+                log('⚠️ No se encontró ejecutivo con ID: ' + datos.id_eje);
             }
         }
         

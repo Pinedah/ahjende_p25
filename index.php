@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Práctica 22 - Sistema de Citas</title>
+    <title>Práctica 25 - Sistema de Citas</title>
     
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
@@ -119,6 +119,46 @@
         .websocket-changed {
             background-color: #ffeb3b !important;
             transition: background-color 0.3s ease;
+        }
+        
+        /* Estilo especial para cambios de plantel - más llamativo */
+        .websocket-plantel-changed {
+            background: linear-gradient(45deg, #ff6b35, #f7931e) !important;
+            color: white !important;
+            font-weight: bold !important;
+            border: 2px solid #ff4500 !important;
+            border-radius: 4px !important;
+            box-shadow: 0 0 15px rgba(255, 107, 53, 0.6) !important;
+            animation: plantelChangePulse 4s ease-in-out !important;
+            transform: scale(1.05) !important;
+        }
+        
+        @keyframes plantelChangePulse {
+            0% { 
+                background: linear-gradient(45deg, #ff6b35, #f7931e);
+                box-shadow: 0 0 15px rgba(255, 107, 53, 0.6);
+                transform: scale(1.05);
+            }
+            25% { 
+                background: linear-gradient(45deg, #f7931e, #ffeb3b);
+                box-shadow: 0 0 20px rgba(247, 147, 30, 0.8);
+                transform: scale(1.08);
+            }
+            50% { 
+                background: linear-gradient(45deg, #ffeb3b, #ff6b35);
+                box-shadow: 0 0 25px rgba(255, 235, 59, 0.8);
+                transform: scale(1.1);
+            }
+            75% { 
+                background: linear-gradient(45deg, #f7931e, #ff6b35);
+                box-shadow: 0 0 20px rgba(247, 147, 30, 0.6);
+                transform: scale(1.08);
+            }
+            100% { 
+                background: linear-gradient(45deg, #ff6b35, #f7931e);
+                box-shadow: 0 0 15px rgba(255, 107, 53, 0.4);
+                transform: scale(1.05);
+            }
         }
         
         .websocket-badge {
@@ -423,7 +463,7 @@
 </head>
 <body>
     <div class="container-fluid mt-4">
-        <h1 class="text-center mb-4">Práctica 22 - Sistema de Citas</h1>
+        <h1 class="text-center mb-4">Práctica 25 - Sistema de Citas</h1>
         
         <div class="card">
             <div class="card-header">
@@ -1012,6 +1052,10 @@
                     procesarComentarioWebSocket(mensaje);
                 } else if (mensaje.tipo === 'color_cambiado' || mensaje.tipo === 'color_eliminado') {
                     procesarColorWebSocket(mensaje);
+                } else if (mensaje.tipo === 'ejecutivo_cambio_plantel') {
+                    procesarCambioPlantelWebSocket(mensaje);
+                } else if (mensaje.tipo === 'actualizacion_citas_plantel') {
+                    procesarActualizacionCitasPlantelWebSocket(mensaje);
                 }
             };
             
@@ -1067,10 +1111,20 @@
                 if (filas[i][idCitIndex] == mensaje.id_cit) {
                     var columnaIndex = obtenerIndiceColumna(mensaje.campo);
                     if (columnaIndex !== -1) {
-                        log('🔄 Actualizando fila ' + i + ', columna ' + columnaIndex + ' con "' + mensaje.valor + '"');
+                        // Convertir IDs a nombres para mostrar correctamente
+                        var valorParaMostrar = mensaje.valor;
+                        if (mensaje.campo === 'id_eje2' && mensaje.valor) {
+                            // Convertir ID de ejecutivo a nombre
+                            valorParaMostrar = obtenerNombreEjecutivo(mensaje.valor) || mensaje.valor;
+                        } else if (mensaje.campo === 'pla_cit' && mensaje.valor) {
+                            // Convertir ID de plantel a nombre
+                            valorParaMostrar = obtenerNombrePlantel(mensaje.valor) || mensaje.valor;
+                        }
+                        
+                        log('🔄 Actualizando fila ' + i + ', columna ' + columnaIndex + ' con "' + valorParaMostrar + '" (valor original: "' + mensaje.valor + '")');
                         
                         // Actualizar con source 'websocket' para evitar bucles
-                        hot.setDataAtCell(i, columnaIndex, mensaje.valor, 'websocket');
+                        hot.setDataAtCell(i, columnaIndex, valorParaMostrar, 'websocket');
                         
                         // Aplicar color automáticamente si es estatus (Práctica 22)
                         if (mensaje.campo === 'est_cit' && mensaje.valor && mensaje.valor !== '') {
@@ -1093,8 +1147,14 @@
                         // Aplicar feedback visual
                         aplicarFeedbackVisual(i, columnaIndex, mensaje.campo);
                         
-                        // Mostrar badge de actualización
-                        mostrarBadgeWebSocket('info', 'Campo ' + mensaje.campo + ' actualizado');
+                        // Mostrar badge de actualización específico para el campo
+                        var mensajeBadge = 'Campo ' + mensaje.campo + ' actualizado';
+                        if (mensaje.campo === 'pla_cit') {
+                            mensajeBadge = '🏢 Plantel actualizado: ' + valorParaMostrar;
+                        } else if (mensaje.campo === 'id_eje2') {
+                            mensajeBadge = '👤 Ejecutivo actualizado: ' + valorParaMostrar;
+                        }
+                        mostrarBadgeWebSocket('info', mensajeBadge);
                     }
                     break;
                 }
@@ -2341,6 +2401,42 @@
                     });
                 } else {
                     console.warn('⚠️ No se puede guardar efectividad: no hay ID de cita válido');
+                }
+            }
+            
+            // Guardar inmediatamente en la base de datos si el campo es plantel
+            if (campo === 'pla_cit' && newValue && newValue !== '') {
+                // Guardar inmediatamente en la base de datos si hay ID de cita
+                if (id_cit && id_cit !== '') {
+                    console.log('🏢 Guardando plantel inmediatamente:', campo, valorParaGuardar, 'para cita ID:', id_cit);
+                    $.ajax({
+                        url: 'server/controlador_citas.php',
+                        type: 'POST',
+                        data: {
+                            action: 'actualizar_cita',
+                            id_cit: id_cit,
+                            campo: campo,
+                            valor: valorParaGuardar
+                        },
+                        dataType: 'json',
+                        success: function(response) {
+                            console.log('🏢 Respuesta del servidor para plantel:', response);
+                            if (response.success) {
+                                console.log('✅ Plantel guardado correctamente en BD');
+                                mostrarBadgeWebSocket('success', 'Plantel actualizado: ' + newValue);
+                            } else {
+                                console.error('❌ Error al guardar plantel:', response.message);
+                                alert('Error al guardar plantel: ' + response.message);
+                            }
+                        },
+                        error: function(xhr, status, error) {
+                            console.error('❌ Error de conexión al guardar plantel:', error);
+                            console.error('Detalles del error:', xhr.responseText);
+                            alert('Error de conexión al guardar plantel: ' + error);
+                        }
+                    });
+                } else {
+                    console.warn('⚠️ No se puede guardar plantel: no hay ID de cita válido');
                 }
             }
             
@@ -3994,6 +4090,65 @@
                     
                     mostrarBadgeWebSocket('info', 'Color eliminado por otro usuario');
                 }
+            }
+        }
+        
+        // =====================================
+        // FUNCIONES WEBSOCKET P25/P26
+        // =====================================
+        
+        function procesarCambioPlantelWebSocket(mensaje) {
+            // El mensaje llega anidado en un objeto 'datos'
+            var datos = mensaje.datos || mensaje;
+            
+            if (!datos.id_eje) {
+                return;
+            }
+            
+            log('🏢 Procesando cambio de plantel en citas - Ejecutivo ID: ' + datos.id_eje);
+            
+            // Actualizar el ejecutivo en nuestra lista local
+            var ejecutivo = ejecutivos.find(e => e.id_eje == datos.id_eje);
+            if (ejecutivo) {
+                ejecutivo.id_pla = datos.plantel_nuevo;
+                
+                // Mostrar notificación con nombres de planteles
+                var plantelAnteriorNombre = datos.nombre_plantel_anterior || ('Plantel ID ' + datos.plantel_anterior);
+                var plantelNuevoNombre = datos.nombre_plantel_nuevo || ('Plantel ID ' + datos.plantel_nuevo);
+                var mensajeNotif = datos.nom_eje + ' cambió de ' + plantelAnteriorNombre + ' a ' + plantelNuevoNombre;
+                
+                mostrarBadgeWebSocket('warning', mensajeNotif);
+                
+                // Si estamos viendo datos del ejecutivo afectado, recargar
+                var ejecutivoFiltro = $('#ejecutivo-filtro').val();
+                if (ejecutivoFiltro == datos.id_eje) {
+                    log('Recargando datos porque el ejecutivo filtrado cambió de plantel');
+                    if (modoFiltroFecha) {
+                        cargarCitas();
+                    } else {
+                        buscarCitas();
+                    }
+                }
+            } else {
+                log('⚠️ No se encontró ejecutivo con ID: ' + datos.id_eje);
+            }
+        }
+        
+        
+        function procesarActualizacionCitasPlantelWebSocket(mensaje) {
+            if (!mensaje.id_pla) {
+                return;
+            }
+            
+            log('📊 Actualizando estadísticas plantel en citas - ID: ' + mensaje.id_pla);
+            
+            // Si estamos filtrando por este plantel, mostrar notificación
+            var plantelFiltro = $('#plantel-filtro').val();
+            if (plantelFiltro == mensaje.id_pla) {
+                mostrarBadgeWebSocket('info', 'Estadísticas actualizadas: ' + mensaje.nom_pla);
+                
+                // Opcional: recargar datos si es necesario
+                // cargarCitas();
             }
         }
         
