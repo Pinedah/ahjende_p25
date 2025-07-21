@@ -1,16 +1,4 @@
 <?php
-// =====================================
-// FUNCIONES UTILITARIAS PARA WEBSOCKETS
-// =====================================
-// Fecha: 21 Julio 2025
-// Autor: GitHub Copilot Assistant
-// Descripción: Funciones para enviar mensajes WebSocket desde el servidor
-
-/**
- * Envía un mensaje WebSocket utilizando la API externa
- * @param array $mensaje Array con el mensaje a enviar
- * @return bool True si se envió correctamente, false en caso contrario
- */
 function enviarMensajeWebSocket($mensaje) {
     try {
         $url = 'https://socket.ahjende.com/api/broadcast';
@@ -47,13 +35,6 @@ function enviarMensajeWebSocket($mensaje) {
     }
 }
 
-/**
- * Envía notificación cuando un ejecutivo cambia de plantel
- * @param int $id_ejecutivo ID del ejecutivo
- * @param int $plantel_anterior ID del plantel anterior
- * @param int $plantel_nuevo ID del plantel nuevo
- * @param string $nombre_ejecutivo Nombre del ejecutivo
- */
 function notificarCambioPlantelEjecutivo($id_ejecutivo, $plantel_anterior, $plantel_nuevo, $nombre_ejecutivo) {
     $mensaje = [
         'tipo' => 'ejecutivo_cambio_plantel',
@@ -72,12 +53,7 @@ function notificarCambioPlantelEjecutivo($id_ejecutivo, $plantel_anterior, $plan
     return enviarMensajeWebSocket($mensaje);
 }
 
-/**
- * Envía notificación cuando se actualiza el conteo de citas de un plantel
- * @param int $id_plantel ID del plantel
- * @param string $nombre_plantel Nombre del plantel
- * @param array $estadisticas Estadísticas del plantel
- */
+
 function notificarActualizacionCitasPlantel($id_plantel, $nombre_plantel, $estadisticas) {
     $mensaje = [
         'tipo' => 'actualizacion_citas_plantel',
@@ -94,13 +70,7 @@ function notificarActualizacionCitasPlantel($id_plantel, $nombre_plantel, $estad
     return enviarMensajeWebSocket($mensaje);
 }
 
-/**
- * Envía notificación cuando se mueve un ejecutivo
- * @param int $id_ejecutivo ID del ejecutivo
- * @param int $padre_anterior ID del padre anterior
- * @param int $padre_nuevo ID del padre nuevo
- * @param string $nombre_ejecutivo Nombre del ejecutivo
- */
+
 function notificarMovimientoEjecutivo($id_ejecutivo, $padre_anterior, $padre_nuevo, $nombre_ejecutivo) {
     $mensaje = [
         'tipo' => 'ejecutivo_movimiento',
@@ -118,13 +88,6 @@ function notificarMovimientoEjecutivo($id_ejecutivo, $padre_anterior, $padre_nue
     return enviarMensajeWebSocket($mensaje);
 }
 
-/**
- * Envía notificación cuando una cita cambia de plantel
- * @param int $id_cita ID de la cita
- * @param int $plantel_anterior ID del plantel anterior
- * @param int $plantel_nuevo ID del plantel nuevo
- * @param string $motivo Motivo del cambio
- */
 function notificarCambioPlantelCita($id_cita, $plantel_anterior, $plantel_nuevo, $motivo = null) {
     $mensaje = [
         'tipo' => 'cita_cambio_plantel',
@@ -142,12 +105,7 @@ function notificarCambioPlantelCita($id_cita, $plantel_anterior, $plantel_nuevo,
     return enviarMensajeWebSocket($mensaje);
 }
 
-/**
- * Envía notificación cuando se desasocia una cita de un ejecutivo
- * @param int $id_cita ID de la cita
- * @param int $ejecutivo_anterior ID del ejecutivo anterior
- * @param string $motivo Motivo de la disociación
- */
+
 function notificarDisociacionCitaEjecutivo($id_cita, $ejecutivo_anterior, $motivo = null) {
     $mensaje = [
         'tipo' => 'cita_disociacion',
@@ -164,12 +122,6 @@ function notificarDisociacionCitaEjecutivo($id_cita, $ejecutivo_anterior, $motiv
     return enviarMensajeWebSocket($mensaje);
 }
 
-/**
- * Obtiene las estadísticas actuales de un plantel para WebSocket
- * @param int $id_plantel ID del plantel
- * @param mysqli $connection Conexión a la base de datos
- * @return array Estadísticas del plantel
- */
 function obtenerEstadisticasPlantel($id_plantel, $connection) {
     $query = "SELECT 
                 COUNT(*) as total_citas,

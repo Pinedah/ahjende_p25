@@ -153,6 +153,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			}
 		break;
 
+		case 'obtener_planteles':
+			$query = "SELECT id_pla, nom_pla FROM plantel ORDER BY nom_pla ASC";
+			$datos = ejecutarConsulta($query, $connection);
+
+			if($datos !== false) {
+				echo respuestaExito($datos, 'Planteles obtenidos correctamente');
+			} else {
+				echo respuestaError('Error al consultar planteles: ' . mysqli_error($connection) . ' Query: ' . $query);
+			}
+		break;
+
 		case 'guardar_cita':
 			// Obtener estructura de la tabla para inserción dinámica
 			$estructuraQuery = "DESCRIBE cita";
@@ -398,6 +409,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 								'CITA EFECTIVA',
 								'CITA NO EFECTIVA'
 							];
+							break;
+						case 'pla_cit':
+							$config['header'] = 'PLANTEL';
+							$config['type'] = 'dropdown';
+							$config['width'] = 180;
+							// Se cargará dinámicamente desde planteles
 							break;
 						default:
 							// Detectar tipo automáticamente

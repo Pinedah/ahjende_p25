@@ -847,6 +847,8 @@
         var hot = null;
         var ejecutivos = [];
         var ejecutivosDropdown = [];
+        var planteles = [];
+        var plantelesDropdown = [];
         var modoFiltroFecha = true; // true = filtro por fecha, false = búsqueda
         var citasPorRango = 4; // Número de citas por rango horario (2 en blanco + 2 para citas)
         var filaEditandose = null; // Fila que se está editando actualmente
@@ -1239,6 +1241,11 @@
                         columna.source = ejecutivosDropdown.length > 0 ? ejecutivosDropdown : ['No hay ejecutivos'];
                         columna.strict = false;
                         console.log('Configurando dropdown ejecutivos:', columna.source);
+                    } else if (col.key === 'pla_cit') {
+                        // Dropdown de planteles - siempre usar la lista más actualizada
+                        columna.source = plantelesDropdown.length > 0 ? plantelesDropdown : ['No hay planteles'];
+                        columna.strict = false;
+                        console.log('Configurando dropdown planteles:', columna.source);
                     } else if (col.key === 'est_cit') {
                         // Dropdown de estatus (usar la fuente del servidor)
                         columna.source = col.source || [
@@ -1334,13 +1341,22 @@
         function cargarPlanteles() {
             return new Promise(function(resolve, reject) {
                 $.ajax({
-                    url: 'server/controlador_ejecutivos.php',
+                    url: 'server/controlador_citas.php',
                     type: 'POST',
                     data: { action: 'obtener_planteles' },
                     dataType: 'json',
                     success: function(response) {
                         if(response.success) {
-                            var planteles = response.data;
+                            planteles = response.data;
+                            plantelesDropdown = response.data.map(function(pla) {
+                                return pla.nom_pla;
+                            });
+                            
+                            // Actualizar configuración de columna dropdown
+                            var colPlantel = columnasConfig.find(function(col) { return col.key === 'pla_cit'; });
+                            if (colPlantel) {
+                                colPlantel.source = plantelesDropdown;
+                            }
                             
                             // Poblar el dropdown del filtro de planteles
                             var selectPlantel = $('#plantel-filtro');
@@ -1377,6 +1393,20 @@
                 return eje.id_eje == idEjecutivo;
             });
             return ejecutivo ? ejecutivo.nom_eje : '';
+        }
+        
+        function obtenerIdPlantel(nombrePlantel) {
+            var plantel = planteles.find(function(pla) {
+                return pla.nom_pla === nombrePlantel;
+            });
+            return plantel ? plantel.id_pla : null;
+        }
+        
+        function obtenerNombrePlantel(idPlantel) {
+            var plantel = planteles.find(function(pla) {
+                return pla.id_pla == idPlantel;
+            });
+            return plantel ? plantel.nom_pla : '';
         }
         
         // =====================================
@@ -2214,10 +2244,26 @@
                 datosPendientes = {}; // Limpiar datos pendientes al cambiar de fila
             }
             
-            // Guardar el cambio en los datos pendientes
-            datosPendientes[campo] = newValue;
+            // Convertir nombres a IDs para campos específicos antes de guardar
+            var valorParaGuardar = newValue;
+            if (campo === 'id_eje2' && newValue && newValue !== '') {
+                // Convertir nombre de ejecutivo a ID
+                var idEjecutivo = obtenerIdEjecutivo(newValue);
+                if (idEjecutivo) {
+                    valorParaGuardar = idEjecutivo;
+                }
+            } else if (campo === 'pla_cit' && newValue && newValue !== '') {
+                // Convertir nombre de plantel a ID
+                var idPlantel = obtenerIdPlantel(newValue);
+                if (idPlantel) {
+                    valorParaGuardar = idPlantel;
+                }
+            }
             
-            console.log('Cambio detectado en fila', row, '- Campo:', campo, '- Valor:', newValue);
+            // Guardar el cambio en los datos pendientes (usar el ID para la BD)
+            datosPendientes[campo] = valorParaGuardar;
+            
+            console.log('Cambio detectado en fila', row, '- Campo:', campo, '- Valor visual:', newValue, '- Valor BD:', valorParaGuardar);
             console.log('Datos pendientes para fila', row, ':', datosPendientes);
             
             // Aplicar color automáticamente si el campo es estatus (Práctica 22)
@@ -2229,7 +2275,7 @@
                 
                 // Guardar inmediatamente en la base de datos si hay ID de cita
                 if (id_cit && id_cit !== '') {
-                    console.log('🔄 Guardando estatus inmediatamente:', campo, newValue);
+                    console.log('🔄 Guardando estatus inmediatamente:', campo, valorParaGuardar);
                     $.ajax({
                         url: 'server/controlador_citas.php',
                         type: 'POST',
@@ -2237,7 +2283,7 @@
                             action: 'actualizar_cita',
                             id_cit: id_cit,
                             campo: campo,
-                            valor: newValue
+                            valor: valorParaGuardar
                         },
                         dataType: 'json',
                         success: function(response) {
@@ -2266,7 +2312,7 @@
                 
                 // Guardar inmediatamente en la base de datos si hay ID de cita
                 if (id_cit && id_cit !== '') {
-                    console.log('🔄 Guardando efectividad inmediatamente:', campo, newValue, 'para cita ID:', id_cit);
+                    console.log('🔄 Guardando efectividad inmediatamente:', campo, valorParaGuardar, 'para cita ID:', id_cit);
                     $.ajax({
                         url: 'server/controlador_citas.php',
                         type: 'POST',
@@ -2274,7 +2320,7 @@
                             action: 'actualizar_cita',
                             id_cit: id_cit,
                             campo: campo,
-                            valor: newValue
+                            valor: valorParaGuardar
                         },
                         dataType: 'json',
                         success: function(response) {
@@ -2303,7 +2349,7 @@
                 enviarMensajeWebSocket('cita_actualizada', {
                     id_cit: id_cit,
                     campo: campo,
-                    valor: newValue
+                    valor: valorParaGuardar // Usar el valor convertido para consistency
                 });
             }
         }
@@ -2876,6 +2922,12 @@
             columnasConfig.forEach(function(col, index) {
                 if (col.key === 'horario') {
                     fila[index] = horario;
+                } else if (col.key === 'id_eje2') {
+                    // Para ejecutivos, usar el nombre en lugar del ID
+                    fila[index] = cita.nom_eje || '';
+                } else if (col.key === 'pla_cit') {
+                    // Para planteles, usar el nombre en lugar del ID
+                    fila[index] = cita.nom_pla || '';
                 } else if (cita.hasOwnProperty(col.key)) {
                     // Mapear directamente desde los datos de la cita
                     fila[index] = cita[col.key] || '';
