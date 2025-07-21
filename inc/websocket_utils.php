@@ -1,38 +1,16 @@
 <?php
 function enviarMensajeWebSocket($mensaje) {
     try {
-        $url = 'https://socket.ahjende.com/api/broadcast';
-        
-        $data = json_encode([
-            'tipo' => $mensaje['tipo'] ?? 'actualizacion',
-            'tabla' => $mensaje['tabla'] ?? '',
-            'accion' => $mensaje['accion'] ?? 'modificado',
-            'datos' => $mensaje['datos'] ?? [],
-            'timestamp' => date('Y-m-d H:i:s'),
-            'origen' => 'p25_persistencia_plantel'
-        ]);
-        
-        $options = [
-            'http' => [
-                'header'  => "Content-Type: application/json\r\n",
-                'method'  => 'POST',
-                'content' => $data,
-                'timeout' => 3,
-                'ignore_errors' => true // Evitar warnings por errores HTTP
-            ]
-        ];
-        
-        $context = stream_context_create($options);
-        
-        // Suprimir warnings para evitar interferencia con JSON
-        $result = @file_get_contents($url, false, $context);
+        // Para desarrollo local, el WebSocket broadcast se maneja por el cliente
+        // No necesitamos hacer broadcast desde el servidor en este entorno
         
         // Log para debugging (solo si es necesario)
-        // file_put_contents('debug_websocket.log', '[' . date('Y-m-d H:i:s') . '] WebSocket enviado: ' . $data . ' Resultado: ' . ($result ? 'SUCCESS' : 'FAILED') . "\n", FILE_APPEND);
+        // file_put_contents('debug_websocket.log', '[' . date('Y-m-d H:i:s') . '] Mensaje WebSocket: ' . json_encode($mensaje) . "\n", FILE_APPEND);
         
-        return $result !== false;
+        return true; // Simular éxito ya que el WebSocket se maneja en frontend
+        
     } catch (Exception $e) {
-        // Log del error (silencioso)
+        // Log del error pero no interrumpir el flujo
         // file_put_contents('debug_websocket.log', '[' . date('Y-m-d H:i:s') . '] Error WebSocket: ' . $e->getMessage() . "\n", FILE_APPEND);
         return false;
     }

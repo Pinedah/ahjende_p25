@@ -596,33 +596,33 @@
             transition: background-color 0.3s ease;
         }
         
-        /* Específico para ejecutivos movidos */
+        /* Específico para ejecutivos movidos - MÁS RÁPIDO */
         .ejecutivo-movido {
             background-color: #ffeb3b !important;
-            animation: pulsoAmarilloIntensivo 3s ease-in-out;
+            animation: pulsoAmarilloRapido 1s ease-in-out;
             border-radius: 6px !important;
             box-shadow: 0 0 10px rgba(255, 235, 59, 0.7) !important;
         }
         
-        @keyframes pulsoAmarilloIntensivo {
+        @keyframes pulsoAmarilloRapido {
             0% { 
                 background-color: #ffeb3b !important; 
                 transform: scale(1);
                 box-shadow: 0 0 10px rgba(255, 235, 59, 0.7);
             }
-            25% { 
+            33% { 
                 background-color: #fff176 !important; 
-                transform: scale(1.02);
-                box-shadow: 0 0 15px rgba(255, 235, 59, 0.8);
+                transform: scale(1.05);
+                box-shadow: 0 0 18px rgba(255, 235, 59, 0.9);
             }
-            50% { 
+            66% { 
                 background-color: #ffeb3b !important; 
-                transform: scale(1);
-                box-shadow: 0 0 10px rgba(255, 235, 59, 0.7);
+                transform: scale(1.02);
+                box-shadow: 0 0 12px rgba(255, 235, 59, 0.8);
             }
-            75% { 
+            100% { 
                 background-color: #fff59d !important; 
-                transform: scale(1.01);
+                transform: scale(1);
                 box-shadow: 0 0 8px rgba(255, 235, 59, 0.6);
             }
             100% { 
@@ -632,10 +632,10 @@
             }
         }
         
-        /* Específico para cambios de plantel - MÁS PROMINENTE */
+        /* Específico para cambios de plantel - MÁS PROMINENTE Y RÁPIDO */
         .ejecutivo-cambio-plantel {
             background: linear-gradient(45deg, #ff9800, #ffc107) !important;
-            animation: pulsoCambioPlantel 8s ease-in-out;
+            animation: pulsoCambioPlantelRapido 1.5s ease-in-out;
             border-radius: 6px !important;
             box-shadow: 0 0 20px rgba(255, 152, 0, 0.8) !important;
             border: 2px solid #ff5722 !important;
@@ -644,42 +644,36 @@
             text-shadow: 1px 1px 2px rgba(0,0,0,0.7) !important;
         }
         
-        @keyframes pulsoCambioPlantel {
+        @keyframes pulsoCambioPlantelRapido {
             0% { 
                 background: linear-gradient(45deg, #ff9800, #ffc107) !important; 
                 transform: scale(1);
                 box-shadow: 0 0 20px rgba(255, 152, 0, 0.8);
                 border-color: #ff5722;
             }
-            20% { 
+            25% { 
                 background: linear-gradient(45deg, #ffc107, #ffeb3b) !important; 
-                transform: scale(1.05);
-                box-shadow: 0 0 30px rgba(255, 193, 7, 0.9);
+                transform: scale(1.08);
+                box-shadow: 0 0 35px rgba(255, 193, 7, 0.9);
                 border-color: #f44336;
             }
-            40% { 
+            50% { 
                 background: linear-gradient(45deg, #ff9800, #ffc107) !important; 
-                transform: scale(1);
-                box-shadow: 0 0 20px rgba(255, 152, 0, 0.8);
+                transform: scale(1.05);
+                box-shadow: 0 0 25px rgba(255, 152, 0, 0.8);
                 border-color: #ff5722;
             }
-            60% { 
+            75% { 
                 background: linear-gradient(45deg, #ffb74d, #ffd54f) !important; 
                 transform: scale(1.03);
-                box-shadow: 0 0 25px rgba(255, 183, 77, 0.7);
+                box-shadow: 0 0 20px rgba(255, 183, 77, 0.7);
                 border-color: #e65100;
             }
-            80% { 
+            100% { 
                 background: linear-gradient(45deg, #ff9800, #ffc107) !important; 
                 transform: scale(1);
-                box-shadow: 0 0 15px rgba(255, 152, 0, 0.6);
+                box-shadow: 0 0 10px rgba(255, 152, 0, 0.4);
                 border-color: #ff5722;
-            }
-            100% { 
-                background-color: transparent !important; 
-                transform: scale(1);
-                box-shadow: none;
-                border: none !important;
             }
         }
         
@@ -1105,16 +1099,14 @@
                     ejecutivo.id_pla = mensaje.nuevo_plantel;
                 }
                 
-                // Regenerar los árboles para mostrar cambios
+                // Regenerar los árboles para mostrar cambios INMEDIATAMENTE
                 generarArbolesPorPlantel();
                 
-                // Aplicar feedback visual específico para movimiento
-                setTimeout(function() {
-                    aplicarFeedbackVisualEjecutivo(mensaje.id_eje, 'movimiento');
-                }, 100);
+                // Aplicar feedback visual específico para movimiento - INMEDIATO SIN DELAY
+                aplicarFeedbackVisualEjecutivo(mensaje.id_eje, 'movimiento');
                 
                 // Mostrar badge de notificación
-                mostrarBadgeWebSocket('warning', 'Ejecutivo movido por otro usuario');
+                mostrarBadgeWebSocket('success', 'Ejecutivo movido por otro usuario');
             }
         }
         
@@ -1143,7 +1135,7 @@
         }
         
         function aplicarFeedbackVisualEjecutivo(id_eje, campo) {
-            console.log('Aplicando feedback visual para ejecutivo:', id_eje, 'campo:', campo);
+            console.log('Aplicando feedback visual INMEDIATO para ejecutivo:', id_eje, 'campo:', campo);
             
             // Buscar el nodo del ejecutivo en todos los árboles
             $('.plantel-tree').each(function() {
@@ -1154,31 +1146,37 @@
                 if (node && node.id) {
                     var nodeElement = tree.find('#' + node.id + '_anchor');
                     if (nodeElement.length) {
-                        console.log('Aplicando estilo a nodo:', node.id, 'en árbol:', treeId);
+                        console.log('Aplicando estilo INMEDIATO a nodo:', node.id, 'en árbol:', treeId);
                         
-                        // Aplicar clase específica según el tipo de cambio
+                        // Aplicar clase específica según el tipo de cambio - INMEDIATO
                         if (campo === 'movimiento') {
                             nodeElement.addClass('ejecutivo-movido');
-                            console.log('Clase ejecutivo-movido aplicada por 3 segundos');
+                            console.log('Clase ejecutivo-movido aplicada inmediatamente por 2 segundos');
                             setTimeout(function() {
                                 nodeElement.removeClass('ejecutivo-movido');
                                 console.log('Clase ejecutivo-movido removida');
-                            }, 3000); // Duración aumentada para movimiento
+                            }, 2000); // Reducido de 3000 a 2000
                         } else if (campo === 'cambio_plantel') {
-                            // Estilo específico y más prominente para cambios de plantel
+                            // Estilo específico y más prominente para cambios de plantel - INMEDIATO
                             nodeElement.addClass('ejecutivo-cambio-plantel');
-                            console.log('Clase ejecutivo-cambio-plantel aplicada por 8 segundos');
+                            console.log('Clase ejecutivo-cambio-plantel aplicada inmediatamente por 3 segundos');
                             setTimeout(function() {
                                 nodeElement.removeClass('ejecutivo-cambio-plantel');
                                 console.log('Clase ejecutivo-cambio-plantel removida');
-                            }, 8000); // Duración aún mayor para cambios de plantel
+                            }, 3000); // Reducido de 8000 a 3000
                         } else {
-                            // Para otros cambios, usar el estilo general
+                            // Para otros cambios, usar el estilo general - INMEDIATO
                             nodeElement.addClass('websocket-changed');
                             setTimeout(function() {
                                 nodeElement.removeClass('websocket-changed');
-                            }, 2000);
+                            }, 1500); // Reducido de 2000 a 1500
                         }
+                        
+                        // Hacer scroll hacia el elemento para que sea visible inmediatamente
+                        nodeElement[0].scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center' 
+                        });
                     } else {
                         console.warn('No se encontró elemento del nodo:', node.id);
                     }
@@ -1248,16 +1246,14 @@
                 var plantelAnterior = ejecutivo.id_pla;
                 ejecutivo.id_pla = datos.plantel_nuevo;
                 
-                // Regenerar todos los árboles para mostrar cambios
+                // Regenerar todos los árboles para mostrar cambios INMEDIATAMENTE
                 generarArbolesPorPlantel();
                 
                 // Recargar conteos de citas porque cambió la distribución
                 cargarCitasPorPlantel();
                 
-                // Aplicar feedback visual específico y más prominente
-                setTimeout(function() {
-                    aplicarFeedbackVisualEjecutivo(datos.id_eje, 'cambio_plantel');
-                }, 100);
+                // Aplicar feedback visual específico INMEDIATO - SIN DELAY
+                aplicarFeedbackVisualEjecutivo(datos.id_eje, 'cambio_plantel');
                 
                 // Mostrar notificación mejorada con nombres de planteles
                 var plantelAnteriorNombre = datos.nombre_plantel_anterior || ('Plantel ID ' + datos.plantel_anterior);
@@ -2161,10 +2157,8 @@
                         // Recargar citas para actualizar conteos
                         cargarCitasPorPlantel();
                         
-                        // Aplicar feedback visual de confirmación
-                        setTimeout(function() {
-                            aplicarFeedbackVisualEjecutivo(ejecutivoId, 'movimiento');
-                        }, 100);
+                        // Aplicar feedback visual de confirmación - INMEDIATO
+                        aplicarFeedbackVisualEjecutivo(ejecutivoId, 'movimiento');
                     } else {
                         console.error('Error del servidor:', response.message);
                         
@@ -2566,7 +2560,7 @@
             if(exito) {
                 setTimeout(function() {
                     $status.fadeOut(150);
-                }, 800);
+                }, 200); // Reducido de 800 a 200ms para ser más rápido
             } else if(error) {
                 setTimeout(function() {
                     $status.fadeOut(300);
@@ -2620,19 +2614,15 @@
         $(document).on('dnd_stop.vakata', function(e, data) {
             console.log('=== FINALIZANDO DRAG ===');
             
-            // Usar función de limpieza centralizada
-            setTimeout(function() {
-                limpiarEstadoDrag();
-                console.log('Estado de drag limpiado desde dnd_stop');
-            }, 100);
+            // Limpiar inmediatamente sin delay
+            limpiarEstadoDrag();
+            console.log('Estado de drag limpiado desde dnd_stop');
             
-            // Resetear variables después de un pequeño delay para permitir que el drop se complete
-            setTimeout(function() {
-                draggedNode = null;
-                draggedFromPlantel = null;
-                draggedExecutivo = null;
-                console.log('Variables de drag reseteadas');
-            }, 100);
+            // Resetear variables inmediatamente
+            draggedNode = null;
+            draggedFromPlantel = null;
+            draggedExecutivo = null;
+            console.log('Variables de drag reseteadas');
         });
         
         // Mejorar la detección de drop en contenedores de planteles
@@ -2694,10 +2684,8 @@
                 });
             }
             
-            // Limpiar estado después del procesamiento
-            setTimeout(function() {
-                limpiarEstadoDrag();
-            }, 100);
+            // Limpiar estado después del procesamiento - INMEDIATO
+            limpiarEstadoDrag();
         });
         
         // =====================================
