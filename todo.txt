@@ -1,0 +1,11 @@
+📌 p25 - Problemática de ejecutivo en cambio de plantel
+Los ejecutivos en cambios de plantel se llevan sus citas al plantel destino, cuando deben persistir en el plantel origen (donde se crearon) y asociadas a su ejecutivo para consultas posteriores, lo que implica un cambio estructural que se debe integrar y reflejar en todos los KPIs relacionados.
+Funcionalidad WebSocket: Los cambios realizados también deben operar con websockets 📡.
+
+📌 p26 - Persistencia de citas asociadas a plantel
+De pronto por regla de negocio, se requiere disociar las citas de los consultores quedando id_eje FK vacío. Se necesita una solución que permita que la cita siga visualizándose en las citas del plantel 🕋
+Funcionalidad WebSocket: Los cambios realizados también deben operar con websockets 📡.
+
+📌 p27 - Bloqueo de celdas y contextMenu en citas
+Dado que se tiene la funcionalidad de una hoja de cálculo, el usuario puede eliminar o editar masivamente múltiples filas. Así que se deben inhabilitar las celdas hasta que se posicione el usuario en alguna. 🔒
+Investigar e implementar también de qué forma se puede aperturar el contextMenu en móviles.
