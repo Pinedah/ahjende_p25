@@ -17,20 +17,23 @@ function enviarMensajeWebSocket($mensaje) {
                 'header'  => "Content-Type: application/json\r\n",
                 'method'  => 'POST',
                 'content' => $data,
-                'timeout' => 5
+                'timeout' => 3,
+                'ignore_errors' => true // Evitar warnings por errores HTTP
             ]
         ];
         
         $context = stream_context_create($options);
-        $result = file_get_contents($url, false, $context);
         
-        // Log para debugging
-        file_put_contents('debug_websocket.log', '[' . date('Y-m-d H:i:s') . '] WebSocket enviado: ' . $data . ' Resultado: ' . ($result ? 'SUCCESS' : 'FAILED') . "\n", FILE_APPEND);
+        // Suprimir warnings para evitar interferencia con JSON
+        $result = @file_get_contents($url, false, $context);
+        
+        // Log para debugging (solo si es necesario)
+        // file_put_contents('debug_websocket.log', '[' . date('Y-m-d H:i:s') . '] WebSocket enviado: ' . $data . ' Resultado: ' . ($result ? 'SUCCESS' : 'FAILED') . "\n", FILE_APPEND);
         
         return $result !== false;
     } catch (Exception $e) {
-        // Log del error
-        file_put_contents('debug_websocket.log', '[' . date('Y-m-d H:i:s') . '] Error WebSocket: ' . $e->getMessage() . "\n", FILE_APPEND);
+        // Log del error (silencioso)
+        // file_put_contents('debug_websocket.log', '[' . date('Y-m-d H:i:s') . '] Error WebSocket: ' . $e->getMessage() . "\n", FILE_APPEND);
         return false;
     }
 }

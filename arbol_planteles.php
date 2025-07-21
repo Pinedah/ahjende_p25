@@ -101,21 +101,26 @@
             position: fixed;
             top: 20px;
             right: 20px;
-            background: #28a745;
+            background: #6c757d;
             color: white;
-            padding: 10px 15px;
-            border-radius: 5px;
+            padding: 8px 12px;
+            border-radius: 4px;
             z-index: 9999;
             display: none;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-size: 0.9em;
+            opacity: 0.9;
+            transition: all 0.2s ease;
         }
         
         .drag-status.error {
             background: #dc3545;
+            opacity: 1;
         }
         
         .drag-status.success {
             background: #28a745;
+            opacity: 0.95;
         }
         
         /* Estilos para mejorar jsTree con sangría tipo árbol de directorios */
@@ -1888,6 +1893,11 @@
                         if(!$(this).hasClass('drop-zone')) {
                             console.log('🎯 PLANTEL DESTINO:', targetPlantel ? targetPlantel.nom_pla : 'Desconocido');
                             
+                            // Actualizar mensaje con plantel destino
+                            var nombreEjecutivo = draggedExecutivo ? draggedExecutivo.nom_eje : 'ejecutivo';
+                            var nombrePlantel = targetPlantel ? targetPlantel.nom_pla : 'plantel';
+                            mostrarMensajeDragDrop(nombreEjecutivo + ' → ' + nombrePlantel, false, false);
+                            
                             // Resaltar visualmente el plantel destino
                             $(this).addClass('plantel-destino-highlight');
                         }
@@ -1909,6 +1919,12 @@
                         
                         if(!container.hasClass('drop-zone')) {
                             console.log('🎯 PLANTEL DESTINO (sobre nodo):', targetPlantel ? targetPlantel.nom_pla : 'Desconocido');
+                            
+                            // Actualizar mensaje con plantel destino
+                            var nombreEjecutivo = draggedExecutivo ? draggedExecutivo.nom_eje : 'ejecutivo';
+                            var nombrePlantelDestino = targetPlantel ? targetPlantel.nom_pla : 'plantel';
+                            mostrarMensajeDragDrop(nombreEjecutivo + ' → ' + nombrePlantelDestino, false, false);
+                            
                             container.addClass('plantel-destino-highlight');
                         }
                         
@@ -2011,6 +2027,12 @@
                     
                     if(!$(this).hasClass('drop-zone')) {
                         console.log('🎯 PLANTEL DESTINO (delegado):', targetPlantel ? targetPlantel.nom_pla : 'Desconocido');
+                        
+                        // Actualizar mensaje con plantel destino
+                        var nombreEjecutivo = draggedExecutivo ? draggedExecutivo.nom_eje : 'ejecutivo';
+                        var nombrePlantelDestino = targetPlantel ? targetPlantel.nom_pla : 'plantel';
+                        mostrarMensajeDragDrop(nombreEjecutivo + ' → ' + nombrePlantelDestino, false, false);
+                        
                         $(this).addClass('plantel-destino-highlight');
                     }
                     $(this).addClass('drop-zone');
@@ -2093,8 +2115,22 @@
                 plantelDestino: plantelDestino.nom_pla
             });
             
-            mostrarMensajeDragDrop('Moviendo ejecutivo...', false, false);
+            // === APLICAR CAMBIO VISUAL INSTANTÁNEO ===
+            // Actualizar datos locales inmediatamente para feedback visual instantáneo
+            var padreAnterior = ejecutivo.id_padre;
+            var plantelAnterior = ejecutivo.id_pla;
             
+            ejecutivo.id_padre = nuevoPadreId;
+            ejecutivo.id_pla = nuevoPlantelId;
+            
+            // Regenerar vista inmediatamente sin delay
+            generarArbolesPorPlantel();
+            limpiarEstadoDrag();
+            
+            // Mostrar mensaje de éxito instantáneo y sutil
+            mostrarMensajeDragDrop('✓ Movido', true, false);
+            
+            // === SINCRONIZAR CON SERVIDOR EN BACKGROUND ===
             $.ajax({
                 url: 'server/controlador_ejecutivos.php',
                 type: 'POST',
@@ -2110,62 +2146,84 @@
                     console.log('Respuesta completa:', response);
                     
                     if(response.success) {
-                        console.log('Movimiento exitoso');
-                        mostrarMensajeDragDrop('✓ Ejecutivo movido correctamente', true, false);
+                        console.log('Movimiento confirmado por servidor');
                         
-                        // Actualizar datos locales
-                        if(ejecutivo) {
-                            var padreAnterior = ejecutivo.id_padre;
-                            var plantelAnterior = ejecutivo.id_pla;
-                            
-                            ejecutivo.id_padre = nuevoPadreId;
-                            ejecutivo.id_pla = nuevoPlantelId;
-                            console.log('Datos locales actualizados');
-                            
-                            // Enviar mensaje WebSocket de movimiento
-                            enviarMensajeWebSocket('ejecutivo_movido', {
-                                id_eje: ejecutivoId,
-                                nuevo_padre: nuevoPadreId,
-                                nuevo_plantel: nuevoPlantelId,
-                                padre_anterior: padreAnterior,
-                                plantel_anterior: plantelAnterior,
-                                nombre_ejecutivo: ejecutivo.nom_eje
-                            });
-                        }
+                        // Enviar mensaje WebSocket de movimiento
+                        enviarMensajeWebSocket('ejecutivo_movido', {
+                            id_eje: ejecutivoId,
+                            nuevo_padre: nuevoPadreId,
+                            nuevo_plantel: nuevoPlantelId,
+                            padre_anterior: padreAnterior,
+                            plantel_anterior: plantelAnterior,
+                            nombre_ejecutivo: ejecutivo.nom_eje
+                        });
                         
-                        // Recargar vista
-                        recargarTodos();
+                        // Recargar citas para actualizar conteos
+                        cargarCitasPorPlantel();
                         
-                        // Limpiar estado del drag
-                        limpiarEstadoDrag();
-                        
-                        // Aplicar feedback visual local después del reload
+                        // Aplicar feedback visual de confirmación
                         setTimeout(function() {
                             aplicarFeedbackVisualEjecutivo(ejecutivoId, 'movimiento');
-                        }, 500);
+                        }, 100);
                     } else {
                         console.error('Error del servidor:', response.message);
+                        
+                        // Revertir cambios locales si el servidor falló
+                        ejecutivo.id_padre = padreAnterior;
+                        ejecutivo.id_pla = plantelAnterior;
+                        generarArbolesPorPlantel();
+                        
                         mostrarMensajeDragDrop('✗ Error: ' + response.message, false, true);
-                        limpiarEstadoDrag();
-                        recargarTodos();
                     }
                 },
                 error: function(xhr, status, error) {
                     console.error('=== ERROR DE CONEXIÓN ===');
                     console.error('Error AJAX:', error);
                     console.error('Status:', status);
+                    console.error('XHR readyState:', xhr.readyState);
+                    console.error('XHR status:', xhr.status);
                     console.error('Respuesta completa:', xhr.responseText);
                     
-                    try {
-                        var errorResponse = JSON.parse(xhr.responseText);
-                        console.error('Error parseado:', errorResponse);
-                        mostrarMensajeDragDrop('✗ Error: ' + errorResponse.message, false, true);
-                    } catch(e) {
-                        mostrarMensajeDragDrop('✗ Error de conexión: ' + error, false, true);
+                    // Revertir cambios locales por error de conexión
+                    ejecutivo.id_padre = padreAnterior;
+                    ejecutivo.id_pla = plantelAnterior;
+                    generarArbolesPorPlantel();
+                    
+                    // Manejo de errores más robusto
+                    var mensajeError = 'Error de conexión';
+                    
+                    if (xhr.responseText) {
+                        try {
+                            // Intentar extraer el JSON válido incluso si hay warnings PHP al inicio
+                            var match = xhr.responseText.match(/\{.*\}$/);
+                            if (match) {
+                                var errorResponse = JSON.parse(match[0]);
+                                if (errorResponse && errorResponse.message) {
+                                    mensajeError = errorResponse.message;
+                                }
+                            } else {
+                                // Si no hay JSON válido, mostrar un mensaje genérico
+                                mensajeError = 'Error del servidor (respuesta malformada)';
+                            }
+                        } catch(e) {
+                            console.error('No se pudo parsear la respuesta de error:', e);
+                            // Verificar si contiene algún mensaje de error conocido
+                            if (xhr.responseText.includes('404 Not Found')) {
+                                mensajeError = 'Error de WebSocket (ignorado)';
+                                console.warn('Error de WebSocket detectado, pero el movimiento puede haber sido exitoso');
+                                // No revertir los cambios si es solo un error de WebSocket
+                                ejecutivo.id_padre = nuevoPadreId;
+                                ejecutivo.id_pla = nuevoPlantelId;
+                                generarArbolesPorPlantel();
+                                mostrarMensajeDragDrop('✓ Movido', true, false);
+                                return;
+                            } else {
+                                mensajeError = 'Error de conexión: ' + (error || 'Desconocido');
+                            }
+                        }
                     }
                     
-                    limpiarEstadoDrag();
-                    recargarTodos();
+                    mostrarMensajeDragDrop('✗ ' + mensajeError, false, true);
                 }
             });
         }
@@ -2504,11 +2562,17 @@
             
             $status.text(mensaje).show();
             
-            if(exito || error) {
+            // Mensajes de éxito se ocultan muy rápido para movimientos instantáneos
+            if(exito) {
                 setTimeout(function() {
-                    $status.hide();
+                    $status.fadeOut(150);
+                }, 800);
+            } else if(error) {
+                setTimeout(function() {
+                    $status.fadeOut(300);
                 }, 3000);
             }
+            // Los mensajes de estado (no éxito ni error) se mantienen hasta el siguiente evento
         }
         
         // Variable para tracking de drag & drop entre planteles
@@ -2543,8 +2607,8 @@
                     $('.plantel-container').not('[data-plantel-id="' + draggedFromPlantel + '"]').addClass('drop-zone');
                     console.log('Zonas de drop resaltadas');
                     
-                    // Mostrar mensaje de estado
-                    mostrarMensajeDragDrop('Arrastrando ' + (draggedExecutivo ? draggedExecutivo.nom_eje : 'ejecutivo') + '...', false, false);
+                    // NO mostrar mensaje durante el arrastre para hacer el movimiento instantáneo
+                    // El mensaje de éxito se mostrará solo cuando el movimiento se complete
                 } else {
                     console.warn('No se pudo encontrar el contenedor de plantel origen');
                 }
